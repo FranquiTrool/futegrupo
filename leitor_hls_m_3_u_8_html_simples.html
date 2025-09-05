@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="pt">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Leitor HLS (M3U8)</title>
+    <style>
+      :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"; }
+      body { margin: 0; background: #0b0f19; color: #e7e7ea; display: grid; place-items: center; min-height: 100vh; }
+      .card { width: min(960px, 96vw); background: #11162a; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,.35); overflow: hidden; }
+      header { padding: 16px 20px; border-bottom: 1px solid #1c2340; display: flex; gap: 12px; align-items: center; }
+      header h1 { font-size: 18px; margin: 0; font-weight: 600; }
+      .content { padding: 14px; }
+      video { width: 100%; height: auto; background: #000; border-radius: 10px; }
+      .row { display: flex; gap: 10px; align-items: center; margin: 10px 0 0; }
+      input[type="text"] { flex: 1; padding: 10px 12px; border-radius: 10px; border: 1px solid #2a335f; background: #0e1430; color: #e7e7ea; }
+      button { padding: 10px 14px; border-radius: 10px; border: 0; background: #3b82f6; color: white; font-weight: 600; cursor: pointer; }
+      button:disabled { opacity: .6; cursor: not-allowed; }
+      .hint { font-size: 12px; opacity: .8; margin: 8px 2px 2px; }
+      .err { color: #ffb4c4; font-size: 13px; min-height: 1.2em; }
+    </style>
+    <!-- hls.js para navegadores que não suportam HLS nativo (ex.: Chrome/Firefox/Edge) -->
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  </head>
+  <body>
+    <div class="card">
+      <header>
+        <h1>Leitor HLS (M3U8)</h1>
+      </header>
+      <div class="content">
+        <video id="player" controls playsinline muted></video>
+        <div class="row">
+          <input id="src" type="text" placeholder="Cole aqui um URL .m3u8" value="https://beautifulpeople.lovecdn.ru/SPT1/index.fmp4.m3u8?token=7c79e61e2a8ac0b234fcccf7e4af1b62982bd47d-c59213df4694b52242dd55766b47806a-1757115235-1757104435" />
+          <button id="load">Reproduzir</button>
+        </div>
+        <div class="hint">Dica: alguns browsers só reproduzem HLS com <code>hls.js</code>. Autoplay pode exigir som <em>muted</em>.</div>
+        <div id="error" class="err"></div>
+      </div>
+    </div>
+
+    <script>
+      const input = document.getElementById('src');
+      const btn = document.getElementById('load');
+      const video = document.getElementById('player');
+      const err = document.getElementById('error');
+
+      async function play(src) {
+        err.textContent = '';
+        try {
+          if (video.canPlayType('application/vnd.apple.mpegurl')) {
+            // Safari / iOS: HLS nativo
+            video.src = src;
+            await video.play().catch(()=>{});
+          } else if (window.Hls && Hls.isSupported()) {
+            // Outros browsers: usar hls.js
+            if (window.hls) { window.hls.destroy(); }
+            window.hls = new Hls({
+              lowLatencyMode: true,
+              backBufferLength: 30,
+              maxBufferLength: 30,
+            });
+            window.hls.attachMedia(video);
+            window.hls.on(Hls.Events.MEDIA_ATTACHED, () => {
+              window.hls.loadSource(src);
+            });
+            window.hls.on(Hls.Events.MANIFEST_PARSED, async () => {
+              await video.play().catch(()=>{});
+            });
+            window.hls.on(Hls.Events.ERROR, (event, data) => {
+              if (data && data.fatal) {
+                switch (data.type) {
+                  case Hls.ErrorTypes.NETWORK_ERROR:
+                    err.textContent = 'Erro de rede ao carregar o stream.';
+                    window.hls.startLoad();
+                    break;
+                  case Hls.ErrorTypes.MEDIA_ERROR:
+                    err.textContent = 'Erro de media. Tentando recuperar…';
+                    window.hls.recoverMediaError();
+                    break;
+                  default:
+                    err.textContent = 'Erro fatal ao reproduzir o stream.';
+                    window.hls.destroy();
+                    break;
+                }
+              }
+            });
+          } else {
+            err.textContent = 'Este navegador não suporta HLS.';
+          }
+        } catch (e) {
+          err.textContent = 'Não foi possível iniciar a reprodução.';
+          console.error(e);
+        }
+      }
+
+      btn.addEventListener('click', () => play(input.value.trim()));
+
+      // Carregar automaticamente o URL pré-preenchido
+      window.addEventListener('DOMContentLoaded', () => {
+        if (input.value) btn.click();
+      });
+    </script>
+  </body>
+</html>
